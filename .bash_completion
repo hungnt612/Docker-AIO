@@ -1,0 +1,10 @@
+# kubectl aliases
+source <(kubectl completion bash)
+complete -F __start_kubectl k
+complete -F __start_kubectl kubecolor
+# helm aliases
+source <(helm completion bash)
+complete -o default -F __start_helm h
+# stern
+source <(/root/go/bin/stern --completion bash)
+
