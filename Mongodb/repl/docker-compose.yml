@@ -1,39 +1,75 @@
-version: "3.8"
+version: '3.8'
 
 services:
-  mongo1:
-    image: hungnt612/mongo-custom:4.4.18
-    container_name: mongo1
-    restart: always
-    network_mode: host
-    command: ["--auth", "--replSet", "my-replica-set", "--bind_ip_all", "--port", "27017", "--keyFile", "/config/mongo-keyfile"]
-    volumes:
-      - ./data/mongo-1:/data/db
+  mongodb1:
+    image: mongo:4.0
+    container_name: mongodb1
+    # cpus: '4'            # Allocate 4 CPU cores
+    # mem_limit: 4g        # Allocate 8 gigabytes of RAM
     ports:
-      - 27017:27017
-    healthcheck:
-      test: test $$(echo "rs.initiate({_id:'my-replica-set',members:[{_id:0,host:\"change_this:27017\"},{_id:1,host:\"change_this:27018\"},{_id:2,host:\"change_this:27019\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1
-      interval: 10s
-      start_period: 30s
+      - "27017:27017"
+    volumes:
+      - ./data/mongodb1:/data/db
+    command: mongod --replSet rs0 --bind_ip 0.0.0.0 --port 27017
 
-  mongo2:
-    image: hungnt612/mongo-custom:4.4.18
-    container_name: mongo2
-    restart: always
-    network_mode: host
-    command: ["--auth", "--replSet", "my-replica-set", "--bind_ip_all", "--port", "27018", "--keyFile", "/config/mongo-keyfile"]
-    volumes:
-      - ./data/mongo-2:/data/db
+  mongodb2:
+    image: mongo:4.0
+    container_name: mongodb2
+    # cpus: '4'            # Allocate 4 CPU cores
+    # mem_limit: 4g        # Allocate 8 gigabytes of RAM
     ports:
-      - 27018:27018
+      - "27018:27018"
+    volumes:
+      - ./data/mongodb2:/data/db
+    command: mongod --replSet rs0 --bind_ip 0.0.0.0 --port 27018
 
-  mongo3:
-    image: hungnt612/mongo-custom:4.4.18
-    container_name: mongo3
-    restart: always
-    network_mode: host
-    command: ["--auth", "--replSet", "my-replica-set", "--bind_ip_all", "--port", "27019", "--keyFile", "/config/mongo-keyfile"]
-    volumes:
-      - ./data/mongo-3:/data/db
+  mongodb3:
+    image: mongo:4.0
+    container_name: mongodb3
+    # cpus: '4'            # Allocate 4 CPU cores
+    # mem_limit: 4g        # Allocate 8 gigabytes of RAM
     ports:
-      - 27019:27019
+      - "27019:27019"
+    volumes:
+      - ./data/mongodb3:/data/db
+    command: mongod --replSet rs0 --bind_ip 0.0.0.0 --port 27019
+
+  setup:
+    image: mongo:4.0
+    container_name: setup
+    depends_on:
+      - mongodb1
+      - mongodb2
+      - mongodb3
+    volumes:
+      - ./scripts:/scripts
+    command: >
+      bash -c '
+        sleep 10 &&
+        mongo mongodb1:27017/admin --eval "
+          rs.initiate({
+            _id: \"rs0\",
+            members: [
+              { _id: 0, host: \"host.docker.internal:27017\" },
+              { _id: 1, host: \"host.docker.internal:27018\" },
+              { _id: 2, host: \"host.docker.internal:27019\" }
+            ]
+          });
+        "
+        sleep 10 &&
+        mongo mongodb1:27017/admin -u admin -p adminpassword --eval "
+          rs.initiate({
+            _id: \"rs0\",
+            members: [
+              { _id: 0, host: \"host.docker.internal:27017\" },
+              { _id: 1, host: \"host.docker.internal:27018\" },
+              { _id: 2, host: \"host.docker.internal:27019\" }
+            ]
+          });
+          db.getSiblingDB(\"admin\").createUser({
+            user: \"admin\",
+            pwd: \"adminpassword\",
+            roles: [ { role: \"root\", db: \"admin\" } ]
+          });
+        "
+      '
